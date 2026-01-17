@@ -1,222 +1,112 @@
-////
-////  ShareViewController.swift
-////  LinkedInShareExtension
-////
-//
-//import UIKit
-//import Social
-//import UniformTypeIdentifiers
-//
-//class ShareViewController: UIViewController {
-//    
-//    let appGroupID = "group.com.einstein.common" // Your App Group
-//    var sharedLink: String?
-//    
-//    // UI elements
-//    private let toneSelector: UISegmentedControl = {
-//        let tones = ["Applaud", "Comment", "Agree", "Insight"]
-//        let sc = UISegmentedControl(items: tones)
-//        sc.selectedSegmentIndex = UISegmentedControl.noSegment
-//        sc.translatesAutoresizingMaskIntoConstraints = false
-//        return sc
-//    }()
-//    
-//    private let resultTextView: UITextView = {
-//        let tv = UITextView()
-//        tv.font = UIFont.systemFont(ofSize: 16)
-//        tv.isEditable = false
-//        tv.layer.borderColor = UIColor.lightGray.cgColor
-//        tv.layer.borderWidth = 1
-//        tv.layer.cornerRadius = 8
-//        tv.translatesAutoresizingMaskIntoConstraints = false
-//        return tv
-//    }()
-//    
-//    private let copyButton: UIButton = {
-//        let btn = UIButton(type: .system)
-//        btn.setTitle("Copy & Done", for: .normal)
-//        btn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 16)
-//        btn.backgroundColor = UIColor.systemBlue
-//        btn.setTitleColor(.white, for: .normal)
-//        btn.layer.cornerRadius = 8
-//        btn.translatesAutoresizingMaskIntoConstraints = false
-//        return btn
-//    }()
-//    
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        
-//        view.backgroundColor = .systemBackground
-//        setupUI()
-//        loadSharedLink()
-//    }
-//    private func saveSharedLink(_ link: String) {
-//            print("Saving link: \(link)")
-//            if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
-//                var existing = sharedDefaults.stringArray(forKey: "SharedLinks") ?? []
-//                existing.append(link)
-//                sharedDefaults.set(existing, forKey: "SharedLinks")
-//                sharedDefaults.synchronize()
-//                print("Link saved to shared defaults, \(existing)")
-//    
-//            } else {
-//                print("Failed to access UserDefaults with app group")
-//            }
-//        }
-//    
-//    
-//    private func setupUI() {
-//        view.addSubview(toneSelector)
-//        view.addSubview(resultTextView)
-//        view.addSubview(copyButton)
-//        
-//        toneSelector.addTarget(self, action: #selector(toneChanged(_:)), for: .valueChanged)
-//        copyButton.addTarget(self, action: #selector(copyAndDone), for: .touchUpInside)
-//        
-//        NSLayoutConstraint.activate([
-//            toneSelector.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-//            toneSelector.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-//            toneSelector.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-//            
-//            resultTextView.topAnchor.constraint(equalTo: toneSelector.bottomAnchor, constant: 12),
-//            resultTextView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-//            resultTextView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-//            resultTextView.heightAnchor.constraint(equalToConstant: 150),
-//            
-//            copyButton.topAnchor.constraint(equalTo: resultTextView.bottomAnchor, constant: 12),
-//            copyButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            copyButton.widthAnchor.constraint(equalToConstant: 160),
-//            copyButton.heightAnchor.constraint(equalToConstant: 44)
-//        ])
-//    }
-//    
-//    private func loadSharedLink() {
-//        if let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem {
-//            if let attachments = extensionItem.attachments {
-//                for provider in attachments {
-//                    if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-//                        provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { (item, error) in
-//                            if let url = item as? URL {
-//                                DispatchQueue.main.async {
-//                                    self.sharedLink = url.absoluteString
-//                                }
-//                            }
-//                        }
-//                    } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-//                        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { (item, error) in
-//                            if let text = item as? String {
-//                                DispatchQueue.main.async {
-//                                    self.sharedLink = text
-//                                }
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-//    
-//    @objc private func toneChanged(_ sender: UISegmentedControl) {
-//        guard let link = sharedLink else {
-//            resultTextView.text = "❌ No link found."
-//            return
-//        }
-//        
-//        let tones = ["Applaud", "Comment", "Agree", "Insight"]
-//        let selectedTone = tones[sender.selectedSegmentIndex]
-//        
-//        resultTextView.text = "⏳ Generating comment for \(selectedTone)..."
-//        generateForTone(selectedTone, link: link)
-//    }
-//    
-//    private func generateForTone(_ tone: String, link: String) {
-//        let defaults = UserDefaults(suiteName: appGroupID)
-//        let authToken = defaults?.string(forKey: "userEmail") ?? "not_found"
-//
-//        let commentGenerator = LinkedInCommentGenerator(authToken: authToken)
-//
-//        commentGenerator.generateAIComment(link: link, tone: tone) { comment in
-//            DispatchQueue.main.async {
-//                if let comment = comment {
-//                    self.resultTextView.text = comment
-//                    if let sharedDefaults = UserDefaults(suiteName: self.appGroupID) {
-//                        sharedDefaults.set([tone:comment], forKey: "LatestResult")
-//                        sharedDefaults.set(tone, forKey: "LatestTone")
-//                        sharedDefaults.set(link, forKey: "LastProcessedLink")
-//                        self.saveSharedLink(link)
-//                        
-//                        sharedDefaults.synchronize()
-//                    }
-//                } else {
-//                    self.resultTextView.text = "⚠️ Error generating comment."
-//                }
-//            }
-//        }
-//    }
-//
-//    
-//    @objc private func copyAndDone() {
-//        UIPasteboard.general.string = resultTextView.text
-//        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
-//    }
-//}
-
-//
-//  ShareViewController.swift
-//  LinkedInShareExtension
-//
-//  Created by Gnanendra Naidu N on 19/06/25.
-//  simplified: only capture shared link and store it in app group defaults
 import UIKit
 import UniformTypeIdentifiers
 
-class ShareViewController: UIViewController {
-    private let appGroupID = "group.com.einstein.common"
+final class ShareViewController: UIViewController {
 
+    private let appGroupID = "group.com.einstein.common"
+    private var didSave = false
+
+    // MARK: - UI
+    private let statusLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Saving link…"
+        label.textAlignment = .center
+        label.font = .systemFont(ofSize: 16, weight: .medium)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    private let doneButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("OK", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        setupUI()
         handleShare()
     }
 
+    // MARK: - UI Setup
+    private func setupUI() {
+        view.backgroundColor = .systemBackground
+
+        view.addSubview(statusLabel)
+        view.addSubview(doneButton)
+
+        NSLayoutConstraint.activate([
+            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+
+            doneButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 24),
+            doneButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+        ])
+
+        doneButton.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
+        doneButton.isEnabled = false
+    }
+
+    // MARK: - Share Handling
     private func handleShare() {
-        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
-            close()
+        guard
+            let items = extensionContext?.inputItems as? [NSExtensionItem]
+        else {
+            statusLabel.text = "No data"
+            doneButton.isEnabled = true
             return
         }
 
         for item in items {
-            if let attachments = item.attachments {
-                for attachment in attachments {
-                    if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                        attachment.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { (data, error) in
-                            if let url = data as? URL {
-                                self.saveLink(url.absoluteString)
-                            } else if let s = data as? String, let url = URL(string: s) {
-                                self.saveLink(url.absoluteString)
-                            }
+            guard let attachments = item.attachments else { continue }
 
-                            // ✅ Force quick dismissal (within 0.3s)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                self.close()
-                            }
+            for provider in attachments {
+                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+
+                    provider.loadItem(
+                        forTypeIdentifier: UTType.url.identifier,
+                        options: nil
+                    ) { [weak self] item, _ in
+                        guard let self = self, !self.didSave else { return }
+                        self.didSave = true
+
+                        if let url = item as? URL {
+                            self.save(url.absoluteString)
+                        } else if let str = item as? String {
+                            self.save(str)
                         }
-                        return
+
+                        DispatchQueue.main.async {
+                            self.statusLabel.text = "Link saved ✓"
+                            self.doneButton.isEnabled = true
+                        }
                     }
+                    return
                 }
             }
         }
-        close()
+
+        statusLabel.text = "No link found"
+        doneButton.isEnabled = true
     }
 
-    private func saveLink(_ link: String) {
+    // MARK: - Persistence
+    private func save(_ link: String) {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
-        var list = defaults.stringArray(forKey: "SharedLinks") ?? []
-        list.append(link)
-        defaults.set(list, forKey: "SharedLinks")
+
+        var links = defaults.stringArray(forKey: "SharedLinks") ?? []
+        links.append(link)
+
+        defaults.set(links, forKey: "SharedLinks")
         defaults.set(link, forKey: "LastProcessedLink")
     }
 
-    private func close() {
-        self.extensionContext?.completeRequest(returningItems: nil)
+    // MARK: - Close
+    @objc private func doneTapped() {
+        extensionContext?.completeRequest(returningItems: nil)
     }
 }
+

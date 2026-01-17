@@ -28,16 +28,33 @@ class LinkedInCommentGenerator {
         performScrape(for: url) { scraped in
             let postText = scraped?.content ?? ""
             let author = scraped?.author ?? "Unknown author"
-            let prompt = self.buildPrompt(
-                tone: tone,
-                postText: postText,
-                author: author,
-                language: language ?? "English",
-                includeEmoji: includeEmoji,
-                emojiText: emojiText,
-                includeHashtag: includeHashtag,
-                hashtagText: hashtagText
-            )
+            var prompt = ""
+            if url.contains("x.com") || url.contains("twitter.com") {
+                prompt = self.buildPrompt_X(
+                    tone: tone,
+                    postText: postText,
+                    author: author,
+                    language: language ?? "English",
+                    includeEmoji: includeEmoji,
+                    emojiText: emojiText,
+                    includeHashtag: includeHashtag,
+                    hashtagText: hashtagText
+                )
+                }
+
+                if url.contains("linkedin.com") {
+                    prompt = self.buildPrompt_Linkedin(
+                        tone: tone,
+                        postText: postText,
+                        author: author,
+                        language: language ?? "English",
+                        includeEmoji: includeEmoji,
+                        emojiText: emojiText,
+                        includeHashtag: includeHashtag,
+                        hashtagText: hashtagText
+                    )
+                }
+            
             self.callCommentAPI(prompt: prompt, email: self.authToken ?? "", completion: completion)        }
     }
 
@@ -143,8 +160,127 @@ class LinkedInCommentGenerator {
             completion(respStr)
         }.resume()
     }
+    
+    private func buildPrompt_X(
+        tone: String,
+        postText: String,
+        author: String,
+        language: String,
+        includeEmoji: Bool,
+        emojiText: String?,
+        includeHashtag: Bool,
+        hashtagText: String?
+    ) -> String {
 
-    private func buildPrompt(
+        let t = tone.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var basePrompt: String
+
+        switch t {
+
+        case "applaud":
+            basePrompt = """
+            Write a short, positive, and authentic reply in \(language) for an X (Twitter) post that congratulates or applauds the author. Keep it casual and human. Do not promote anything or ask questions.
+
+            Post: \(postText)
+            Author: \(author)
+            """
+
+        case "agree":
+            basePrompt = """
+            Generate a concise X (Twitter) reply (under 12 words) in \(language) that clearly expresses agreement with the author's point.
+
+            Guidelines:
+            - Sound natural and conversational.
+            - Avoid repeating the post text.
+            - No quotes.
+
+            Post: \(postText)
+            Author: \(author)
+            """
+
+        case "fun":
+            basePrompt = """
+            Write a fun, witty, and relatable reply in \(language) for this X (Twitter) post.
+
+            Guidelines:
+            - Light humor or clever observation.
+            - Casual and human, not forced.
+            - Relevant to the post content.
+            - Avoid offensive or edgy jokes.
+
+            Post: \(postText)
+            Author: \(author)
+            """
+
+        case "perspective":
+            basePrompt = """
+            Generate a thoughtful yet concise reply in \(language) for an X (Twitter) post by \(author) that adds a fresh perspective or builds on their idea.
+
+            Guidelines:
+            - Acknowledge the idea naturally.
+            - Add a new angle or insight.
+            - Keep it under 30 words.
+            - No quotes.
+
+            Post: \(postText)
+            """
+
+        case "question":
+            basePrompt = """
+            Write a meaningful, curiosity-driven question in \(language) as a reply to this X (Twitter) post.
+
+            Guidelines:
+            - Directly relate to the post.
+            - Encourage discussion.
+            - Keep it short (under 25 words).
+            - Avoid generic phrases.
+
+            Post: \(postText)
+            Author: \(author)
+            """
+
+        case "repost":
+            basePrompt = """
+            Generate a short repost (retweet with comment) caption in \(language) for an X (Twitter) post by \(author).
+
+            Guidelines:
+            - Add a personal takeaway or insight.
+            - Avoid generic praise.
+            - Keep it under 30 words.
+            - No quotes.
+
+            Post: \(postText)
+            """
+
+        default:
+            basePrompt = """
+            Generate a short, natural X (Twitter) reply in \(language) for the post by \(author).
+
+            Post: \(postText)
+            """
+        }
+
+        var additions = ""
+
+        if includeEmoji {
+            additions += "\n\nWhen producing the reply, you may use suitable emojis sparingly."
+        } else {
+            additions += "\n\nWhen producing the reply, strictly do not use any emojis."
+        }
+
+        if includeHashtag {
+            additions += "\n\nWhen producing the reply, you may use relevant hashtags (max 1–2)."
+        } else {
+            additions += "\n\nWhen producing the reply, strictly do not use any hashtags."
+        }
+
+        additions += "\n\nEnsure the reply feels natural for X and stays concise."
+
+        return basePrompt + additions
+    }
+
+
+    private func buildPrompt_Linkedin(
         tone: String,
         postText: String,
         author: String,
