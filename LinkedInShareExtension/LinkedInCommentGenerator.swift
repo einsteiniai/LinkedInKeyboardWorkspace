@@ -11,9 +11,29 @@ class LinkedInCommentGenerator {
     }
     
     // MARK: - Main Function
-    /// Generates a comment for a LinkedIn post from its URL
+    /// Generates a comment for a LinkedIn or X post from its URL
     func generateAIComment(link: String, tone: String, completion: @escaping (String?) -> Void) {
-        // Step 1: Scrape the LinkedIn post
+        // Detect URL type
+        let isXUrl = link.contains("twitter.com") || link.contains("x.com")
+        
+        // Step 1: Scrape the post (LinkedIn or X)
+        if isXUrl {
+            scrapeXPost(url: link) { postData in
+                guard let postData = postData else {
+                    completion("❌ Failed to scrape X post")
+                    return
+                }
+                
+                self.generateComment(
+                    postContent: link,
+                    author: postData.author,
+                    commentType: tone,
+                    imageUrl: link
+                ) { comment in
+                    completion(comment)
+                }
+            }
+        } else {
             self.generateComment(
                 postContent: link,
                 author: link,
@@ -22,6 +42,7 @@ class LinkedInCommentGenerator {
             ) { comment in
                 completion(comment)
             }
+        }
     }
     
     // MARK: - Post Data Structure
@@ -83,6 +104,82 @@ class LinkedInCommentGenerator {
             do {
                 let postData = try self.parseScrapedData(data: data, url: url)
                 completion(postData)
+            } catch {
+                completion(self.createErrorPostData(url: url, message: "❌ Parse error: \(error.localizedDescription)"))
+            }
+        }.resume()
+    }
+    
+    // MARK: - X (Twitter) Scraping Function
+    func scrapeXPost(url: String, completion: @escaping (PostData?) -> Void) {
+        guard let encodedUrl = url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            completion(createErrorPostData(url: url, message: "❌ Error encoding URL"))
+            return
+        }
+        
+        let apiUrl = "https://publish.twitter.com/oembed?url=\(encodedUrl)"
+        
+        guard let requestURL = URL(string: apiUrl) else {
+            completion(createErrorPostData(url: url, message: "❌ Invalid URL"))
+            return
+        }
+        
+        URLSession.shared.dataTask(with: requestURL) { [weak self] data, response, error in
+            guard let self = self else {
+                completion(nil)
+                return
+            }
+            
+            if let error = error {
+                completion(self.createErrorPostData(url: url, message: "❌ Network error: \(error.localizedDescription)"))
+                return
+            }
+            
+            guard let data = data else {
+                completion(self.createErrorPostData(url: url, message: "❌ No data received"))
+                return
+            }
+            
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let html = json["html"] as? String {
+                    
+                    // Parse X/Twitter oEmbed response - strip HTML tags
+                    let tweetText = html
+                        .replacingOccurrences(of: "<blockquote[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "</blockquote>", with: "")
+                        .replacingOccurrences(of: "<a[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "</a>", with: "")
+                        .replacingOccurrences(of: "<p[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "</p>", with: " ")
+                        .replacingOccurrences(of: "<br[^>]*>", with: " ", options: .regularExpression)
+                        .replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "&mdash;", with: "—")
+                        .replacingOccurrences(of: "&amp;", with: "&")
+                        .replacingOccurrences(of: "&lt;", with: "<")
+                        .replacingOccurrences(of: "&gt;", with: ">")
+                        .replacingOccurrences(of: "&quot;", with: "\"")
+                        .replacingOccurrences(of: "&#39;", with: "'")
+                        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    let author = json["author_name"] as? String ?? "Unknown author"
+                    
+                    let postData = PostData(
+                        content: tweetText,
+                        author: author,
+                        date: "Recent",
+                        likes: 0,
+                        comments: 0,
+                        images: [],
+                        commentsList: [],
+                        url: url
+                    )
+                    
+                    completion(postData)
+                } else {
+                    completion(self.createErrorPostData(url: url, message: "❌ No content found"))
+                }
             } catch {
                 completion(self.createErrorPostData(url: url, message: "❌ Parse error: \(error.localizedDescription)"))
             }

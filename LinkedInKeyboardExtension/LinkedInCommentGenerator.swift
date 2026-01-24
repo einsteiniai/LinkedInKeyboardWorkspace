@@ -60,6 +60,19 @@ class LinkedInCommentGenerator {
 
 
     private func performScrape(for urlString: String, completion: @escaping ((content: String, author: String)?) -> Void) {
+        // Detect URL type
+        let isXUrl = urlString.contains("twitter.com") || urlString.contains("x.com")
+        
+        if isXUrl {
+            // Use X/Twitter oEmbed API
+            scrapeXPost(url: urlString, completion: completion)
+        } else {
+            // Use LinkedIn backend scraper
+            scrapeLinkedInPost(url: urlString, completion: completion)
+        }
+    }
+    
+    private func scrapeLinkedInPost(url: String, completion: @escaping ((content: String, author: String)?) -> Void) {
         // Construct query properly
         guard var components = URLComponents(string: "https://backend.einsteini.ai/scrape") else {
             completion(nil)
@@ -67,7 +80,7 @@ class LinkedInCommentGenerator {
         }
 
         components.queryItems = [
-            URLQueryItem(name: "url", value: urlString)
+            URLQueryItem(name: "url", value: url)
         ]
 
         guard let requestURL = components.url else {
@@ -108,6 +121,68 @@ class LinkedInCommentGenerator {
                 print("⚠️ JSON parse error:", error.localizedDescription)
                 let asString = String(data: data, encoding: .utf8) ?? ""
                 completion((content: asString, author: "Unknown author"))
+            }
+        }.resume()
+    }
+    
+    private func scrapeXPost(url: String, completion: @escaping ((content: String, author: String)?) -> Void) {
+        guard let encodedUrl = url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            completion(nil)
+            return
+        }
+        
+        let apiUrl = "https://publish.twitter.com/oembed?url=\(encodedUrl)"
+        
+        guard let requestURL = URL(string: apiUrl) else {
+            completion(nil)
+            return
+        }
+        
+        URLSession.shared.dataTask(with: requestURL) { data, response, error in
+            if let error = error {
+                print("❌ Error:", error.localizedDescription)
+                completion(nil)
+                return
+            }
+            
+            guard let data = data else {
+                print("⚠️ No data returned")
+                completion(nil)
+                return
+            }
+            
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let html = json["html"] as? String {
+                    
+                    // Parse X/Twitter oEmbed response - strip HTML tags
+                    let tweetText = html
+                        .replacingOccurrences(of: "<blockquote[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "</blockquote>", with: "")
+                        .replacingOccurrences(of: "<a[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "</a>", with: "")
+                        .replacingOccurrences(of: "<p[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "</p>", with: " ")
+                        .replacingOccurrences(of: "<br[^>]*>", with: " ", options: .regularExpression)
+                        .replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "&mdash;", with: "—")
+                        .replacingOccurrences(of: "&amp;", with: "&")
+                        .replacingOccurrences(of: "&lt;", with: "<")
+                        .replacingOccurrences(of: "&gt;", with: ">")
+                        .replacingOccurrences(of: "&quot;", with: "\"")
+                        .replacingOccurrences(of: "&#39;", with: "'")
+                        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    let author = json["author_name"] as? String ?? "Unknown author"
+                    
+                    completion((content: tweetText, author: author))
+                } else {
+                    completion(nil)
+                }
+            } catch {
+                print("⚠️ JSON parse error:", error.localizedDescription)
+                completion(nil)
             }
         }.resume()
     }
